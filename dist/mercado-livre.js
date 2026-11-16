@@ -17,7 +17,7 @@ async function call(action, data) {
 export async function openMercadoLivre(modal, esc) {
   const redirect = location.origin + root + 'callback';
   modal('Mercado Livre', `<div class="pad">
-      <p>Copie esta URL para o campo <strong>Redirect URI</strong> no DevCenter e habilite PKCE.</p>
+      <p>No DevCenter, crie o aplicativo, cadastre a URL abaixo como <strong>Redirect URI</strong> e habilite PKCE. Depois copie as duas credenciais para este painel.</p>
       <label>URL de retorno<input readonly value="${esc(redirect)}"></label>
       <p id="meli-status" role="status">Consultando conexão…</p>
       <form id="meli-connect" hidden autocomplete="off">
@@ -58,7 +58,7 @@ export async function openMercadoLivre(modal, esc) {
   try {
     const {account} = await call('status');
     if (!account) {
-      status.textContent = 'Cole as duas credenciais do app criado no DevCenter.';
+      status.textContent = 'Cole o Client ID e o Client Secret do DevCenter. Ao clicar em Autorizar loja, você irá ao Mercado Livre para confirmar o acesso.';
       form.hidden = false;
       return;
     }
