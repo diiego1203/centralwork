@@ -1,5 +1,5 @@
-const project = 'https://jbcvliihcarmbrszghcp.supabase.co';
-const publishableKey = 'sb_publishable_Lg94pvVjZtoMd9iNPBDMxQ_3_EOH4w-';
+export const project = 'https://jbcvliihcarmbrszghcp.supabase.co';
+export const publishableKey = 'sb_publishable_Lg94pvVjZtoMd9iNPBDMxQ_3_EOH4w-';
 let session;
 
 async function request(path, {method = 'GET', body, token, prefer} = {}) {
@@ -30,7 +30,7 @@ function acceptSession(data) {
   session = {...data, expiresAt: Date.now() + Number(data.expires_in) * 1000};
 }
 
-async function accessToken() {
+export async function accessToken() {
   if (!session) throw new Error('Entre novamente para continuar.');
   if (session.expiresAt - Date.now() < 60000) {
     acceptSession(await request('/auth/v1/token?grant_type=refresh_token', {
@@ -90,3 +90,4 @@ export async function saveWorkspace(data, revision) {
   if (rows?.length !== 1) throw new Error('A gravação não foi confirmada. Atualize o painel antes de repetir a alteração.');
   return rows[0].revision;
 }
+
