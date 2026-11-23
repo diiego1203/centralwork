@@ -5,7 +5,58 @@ export function validateRule(r){for(const k of ['fee','fixed','freight','tax','m
 export function quote(cost,r){validateRule(r);return Math.ceil((+cost + +r.fixed+Math.max(0,r.freight-r.subsidy)+ +r.fulfillment)/(1-(+r.fee + +r.tax + +r.margin + +r.programFee)/100)*100)/100;}
 export const priceFor=(p,c)=>p.channelPrices?.[c]??p.price;
 export function economics(p,c,q,r){const total=round(priceFor(p,c)*q),cost=round(p.cost*q),fees=round(total*(+r.fee + +r.programFee)/100+r.fixed*q),tax=round(total*r.tax/100),freight=round((Math.max(0,r.freight-r.subsidy)+ +r.fulfillment)*q);return{total,cost,fees,tax,freight,profit:round(total-cost-fees-tax-freight)};}
-export function addOrder(s,id,c,q){const p=s.products.find(p=>p.id===id);if(!p||!channels.includes(c)||!Number.isInteger(q)||q<=0||q>available(p))throw Error('Quantidade inválida ou estoque insuficiente.');validateRule(s.rules[c]);const o={id:'CW-'+String(s.nextOrder++).padStart(5,'0'),product:id,name:p.name,sku:p.sku,channel:c,qty:q,status:'Reservado',date:new Date().toISOString(),unitPrice:priceFor(p,c),...economics(p,c,q,s.rules[c])};p.reserved+=q;s.orders.unshift(o);return o;}
+export function addOrder(s, id, channel, qty, sale) {
+  const product = s.products.find(p => p.id === id);
+  const stock = product && (sale ? product.stock - product.reserved : available(product));
+  if (!product || !channels.includes(channel) || !Number.isInteger(qty) || qty <= 0 || qty > stock) {
+    throw Error('Quantidade inválida ou estoque insuficiente.');
+  }
+  const rule = s.rules[channel];
+  validateRule(rule);
+  const date = new Date().toISOString();
+  let entry = {unitPrice: priceFor(product, channel)};
+  if (sale) {
+    const reference = String(sale.reference ?? '').trim();
+    const unitPrice = Number(sale.unitPrice);
+    if (!reference || reference.length > 100 || !Number.isFinite(unitPrice) || unitPrice <= 0 || round(unitPrice) !== unitPrice) {
+      throw Error('Informe a referência do canal e um preço unitário válido.');
+    }
+    if (s.orders.some(order => order.channel === channel && order.saleReference === reference)) {
+      throw Error('Já existe uma venda com essa referência neste canal.');
+    }
+    entry = {unitPrice, saleReference: reference};
+  }
+  const order = {
+    id: 'CW-' + String(s.nextOrder++).padStart(5, '0'),
+    product: id, name: product.name, sku: product.sku, channel, qty, status: 'Reservado', date,
+    ...entry, ...economics({...product, channelPrices: {[channel]: entry.unitPrice}}, channel, qty, rule)
+  };
+  product.reserved += qty;
+  s.orders.unshift(order);
+  return order;
+}
+
+export function recordInvoice(state, orderId, input) {
+  const order = state.orders.find(item => item.id === orderId);
+  if (!order?.saleReference || order.status === 'Cancelado') {
+    throw Error('Selecione uma venda real em aberto ou enviada.');
+  }
+  const key = String(input.key ?? '').trim();
+  const issuer = String(input.issuer ?? '').trim();
+  if (!/^[0-9]{44}$/.test(key) || key.slice(20, 22) !== '55') {
+    throw Error('Informe a chave de acesso de 44 dígitos de uma NF-e (modelo 55).');
+  }
+  const sum = [...key.slice(0, -1)].reverse().reduce((total, digit, index) => total + Number(digit) * (2 + index % 8), 0);
+  if (Number(key.at(-1)) !== (11 - sum % 11) % 11 % 10) {
+    throw Error('O dígito verificador da chave da NF-e está incorreto.');
+  }
+  if (!issuer || issuer.length > 80) throw Error('Informe qual emissor gerou a nota.');
+  if (state.orders.some(item => item.id !== orderId && item.invoice?.key === key)) {
+    throw Error('Essa NF-e já está registrada em outro pedido.');
+  }
+  order.invoice = {key, issuer, recordedAt: new Date().toISOString()};
+  return order;
+}
 export function transition(s,id,status){const o=s.orders.find(o=>o.id===id);if(!o||o.status!=='Reservado'||!['Enviado','Cancelado'].includes(status))throw Error('Transição indisponível.');const p=s.products.find(p=>p.id===o.product);p.reserved-=o.qty;if(status==='Enviado')p.stock-=o.qty;o.status=status;}
 export function totals(s){const orders=s.orders.filter(o=>o.status!=='Cancelado');return Object.fromEntries(['total','cost','fees','tax','freight','profit'].map(k=>[k,round(orders.reduce((a,o)=>a+o[k],0))]).concat([['count',orders.length],['inventory',round(s.products.reduce((a,p)=>a+p.stock*p.cost,0))],['available',s.products.reduce((a,p)=>a+available(p),0)]]));}
 export const columns=['sku','grupo','nome','titulo','subtitulo','descricao','marca','modelo','gtin','motivo_sem_gtin','categoria','cor','tamanho','custo','preco','estoque','seguranca','material','genero','cuidados','peso_kg','comprimento_cm','largura_cm','altura_cm','ncm','cest','origem','imagens_urls','medidas_json','categoria_ml','categoria_shopee','tipo_amazon','categoria_tiktok','atributos_json'];
